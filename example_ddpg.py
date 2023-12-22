@@ -6,7 +6,7 @@ import numpy as np
 import gym
 from gym.spaces import Discrete, Box
 
-torch.manual_seed(1)
+torch.manual_seed(0)
 
 def mlp(sizes, activation=nn.Tanh, output_activation=nn.Identity):
     # Build a feedforward neural network.
@@ -43,7 +43,7 @@ class mlp3(nn.Module):
             return torch.zeros((x.shape[0],1))
 
 def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0, 
-          epochs=100000, batch_size=20, render=False):
+          epochs=100000, batch_size=10000, render=False):
 
     # make environment, check spaces, get obs / act dims
     env = gym.make(env_name)
@@ -75,14 +75,23 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
         pre_pro_actp = actor(obsp)
         actp = pre_pro_actp
         y = weights.reshape(-1, 1) + critic(torch.concat((obsp, actp), dim=1))
+        y2 = critic(torch.concat((obsp, actp), dim=1))
         y1 = critic(torch.concat((obs, act), dim=1)) 
-        #print("prediction=", y1.shape, obs.shape, act.shape, y1[0:50,0])
+        #print("prediction=", y1.shape, obs.shape, act.shape)
+        #print(obs[0:50,0])
+        #print(obsp[0:50,0])
+        #print(y1[0:50,0])
+        #print(y[0:50,0])
+        #print(y2[0:50,0])
+        #print(torch.concat((obs,act),dim=1))
+        #print(torch.concat((obsp,actp),dim=1))
+        #print(act)
         l = (y1- y)**2
         return l.mean()
 
     def compute_actor_loss(obs):
         pre_pro_act = actor(obs)
-        return -critic(torch.concat((obs, pre_pro_act), dim=1)).mean()
+        return critic(torch.concat((obs, pre_pro_act), dim=1)).mean()
 
     # for training policy
     def train_one_epoch():
@@ -120,7 +129,7 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
             obs, rew, done, _, _ = env.step(proc_act)
 
             batch_obsp.append(obs.copy())
-            batch_acts.append(act)
+            batch_acts.append(act.item())
             ep_rews.append(rew)
     
             if done:
@@ -146,7 +155,7 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
         critic_optimizer.zero_grad()
         critic_batch_loss = compute_critic_loss(obs=torch.as_tensor(batch_obs, dtype=torch.float32),
                                                 obsp=torch.as_tensor(batch_obsp, dtype=torch.float32),
-                                                act=torch.as_tensor(batch_acts, dtype=torch.int32).reshape((-1, act_output_dim)),
+                                                act=torch.as_tensor(batch_acts, dtype=torch.float32).reshape((-1, act_output_dim)),
                                                 weights=torch.as_tensor(batch_weights, dtype=torch.float32))
         critic_batch_loss.backward()
         critic_optimizer.step()
@@ -169,8 +178,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env_name', '--env', type=str, default='CartPole-v0')
     parser.add_argument('--render', action='store_true')
-    parser.add_argument('--critic_lr', type=float, default=1e-3)
-    parser.add_argument('--actor_lr', type=float, default=1e-4)
+    parser.add_argument('--critic_lr', type=float, default=1e-1)
+    parser.add_argument('--actor_lr', type=float, default=1e-3)
     args = parser.parse_args()
     print('\nUsing simplest formulation of policy gradient.\n')
     train(env_name=args.env_name, render=args.render, critic_lr=args.critic_lr, actor_lr=args.actor_lr)
