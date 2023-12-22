@@ -80,9 +80,9 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
         #print("prediction=", y1.shape, obs.shape, act.shape)
         #print(obs[0:50,0])
         #print(obsp[0:50,0])
-        #print(y1[0:50,0])
+        print(y1[0:50,0])
         #print(y[0:50,0])
-        #print(y2[0:50,0])
+        print(y2[0:50,0])
         #print(torch.concat((obs,act),dim=1))
         #print(torch.concat((obsp,actp),dim=1))
         #print(act)
@@ -94,7 +94,7 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
         return critic(torch.concat((obs, pre_pro_act), dim=1)).mean()
 
     # for training policy
-    def train_one_epoch():
+    def train_one_epoch(epoch_idx):
         # for now, the entire run is sampled for gradient calculation (B = N)
         batch_obs = []          # for observations
         batch_obsp = []         # for the other part of the transitions
@@ -162,14 +162,16 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
         
         actor_optimizer.zero_grad()
         actor_batch_loss = compute_actor_loss(obs=torch.as_tensor(batch_obs, dtype=torch.float32))
-        actor_batch_loss.backward()
-        actor_optimizer.step()
+        if(epoch_idx > 50 and epoch_idx % 100 == 0):
+            actor_batch_loss.backward()
+            actor_optimizer.step()
+        
 
         return critic_batch_loss, actor_batch_loss, batch_rets, batch_lens
 
     # training loop
     for i in range(epochs):
-        critic_batch_loss, actor_batch_loss, batch_rets, batch_lens = train_one_epoch()
+        critic_batch_loss, actor_batch_loss, batch_rets, batch_lens = train_one_epoch(i)
         print('epoch: %3d \t critic loss: %.3f \t actor loss: %.3f \t return: %.3f \t ep_len: %.3f'%
                 (i, critic_batch_loss, actor_batch_loss, np.mean(batch_rets), np.mean(batch_lens)))
 
@@ -178,8 +180,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env_name', '--env', type=str, default='CartPole-v0')
     parser.add_argument('--render', action='store_true')
-    parser.add_argument('--critic_lr', type=float, default=1e-1)
-    parser.add_argument('--actor_lr', type=float, default=1e-3)
+    parser.add_argument('--critic_lr', type=float, default=1e-2)
+    parser.add_argument('--actor_lr', type=float, default=1e-2)
     args = parser.parse_args()
     print('\nUsing simplest formulation of policy gradient.\n')
     train(env_name=args.env_name, render=args.render, critic_lr=args.critic_lr, actor_lr=args.actor_lr)
