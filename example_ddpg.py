@@ -8,6 +8,8 @@ from gym.spaces import Discrete, Box
 
 torch.manual_seed(0)
 
+#torch.autograd.set_detect_anomaly(True)
+
 def mlp(sizes, activation=nn.Tanh, output_activation=nn.Identity):
     # Build a feedforward neural network.
     layers = []
@@ -86,7 +88,8 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
         #print(torch.concat((obs,act),dim=1))
         #print(torch.concat((obsp,actp),dim=1))
         #print(act)
-        l = (y1- y)**2
+        l = (y1-y)**2 + 0.005*y1**2
+        #l = (y1-weights.reshape(-1,1))**2
         return l.mean()
 
     def compute_actor_loss(obs):
@@ -140,6 +143,7 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
 
                 # the weight for each logprob(a|s) is R(tau)
                 batch_weights += [ep_ret] * ep_len
+                #batch_weights += np.arange(ep_ret**2, 0, -ep_ret).tolist()
 
                 # reset episode-specific variables
                 obs, done, ep_rews = env.reset()[0], False, []
@@ -162,9 +166,9 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
         
         actor_optimizer.zero_grad()
         actor_batch_loss = compute_actor_loss(obs=torch.as_tensor(batch_obs, dtype=torch.float32))
-        if(epoch_idx > 50 and epoch_idx % 100 == 0):
-            actor_batch_loss.backward()
-            actor_optimizer.step()
+        #if(epoch_idx > 1 and epoch_idx % 20 == 0):
+        actor_batch_loss.backward()
+        actor_optimizer.step()
         
 
         return critic_batch_loss, actor_batch_loss, batch_rets, batch_lens
@@ -180,7 +184,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env_name', '--env', type=str, default='CartPole-v0')
     parser.add_argument('--render', action='store_true')
-    parser.add_argument('--critic_lr', type=float, default=1e-2)
+    parser.add_argument('--critic_lr', type=float, default=0.1)
     parser.add_argument('--actor_lr', type=float, default=1e-2)
     args = parser.parse_args()
     print('\nUsing simplest formulation of policy gradient.\n')
