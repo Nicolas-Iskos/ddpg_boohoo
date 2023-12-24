@@ -166,7 +166,6 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
         else:
             actor_batch_loss.backward()
             actor_optimizer.step()
-        
 
         return critic_batch_loss, actor_batch_loss, batch_rets, batch_lens
 
