@@ -73,28 +73,21 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
         return int(act > 0)
 
     # make loss function whose gradient, for the right data, is policy gradient
-    def compute_critic_loss(obs, obsp, act, weights):
+    def compute_critic_loss(obs, obsp, act, weights, cows):
         pre_pro_actp = actor(obsp)
         actp = pre_pro_actp
         y = weights.reshape(-1, 1) + critic(torch.concat((obsp, actp), dim=1))
         y2 = critic(torch.concat((obsp, actp), dim=1))
         y1 = critic(torch.concat((obs, act), dim=1)) 
-        #print("prediction=", y1.shape, obs.shape, act.shape)
-        #print(obs[0:50,0])
-        #print(obsp[0:50,0])
-        print(y1[0:50,0])
-        #print(y[0:50,0])
-        print(y2[0:50,0])
-        #print(torch.concat((obs,act),dim=1))
-        #print(torch.concat((obsp,actp),dim=1))
-        #print(act)
-        l = (y1-y)**2 + 0.005*y1**2
-        #l = (y1-weights.reshape(-1,1))**2
+        #print(y1[0:50,0])
+        #print(y2[0:50,0])
+        l = (y1-y)**2 + weights.reshape(-1,1)*(y1 * cows.reshape(-1,1))**2
         return l.mean()
 
     def compute_actor_loss(obs):
         pre_pro_act = actor(obs)
-        return critic(torch.concat((obs, pre_pro_act), dim=1)).mean()
+        print(critic(torch.concat((obs, pre_pro_act), dim=1)).mean())
+        return -(critic(torch.concat((obs, pre_pro_act), dim=1))**2).mean()
 
     # for training policy
     def train_one_epoch(epoch_idx):
@@ -103,11 +96,11 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
         batch_obsp = []         # for the other part of the transitions
         batch_acts = []         # for actions
         batch_weights = []      # for R(tau) weighting in policy gradient
+        batch_cows = []
         batch_rets = []         # for measuring episode returns
         batch_lens = []         # for measuring episode lengths
 
         # reset episode-specific variables
-        #obs = env.reset()       # first obs comes from starting distribution
         obs = env.reset()[0]       # first obs comes from starting distribution
         done = False            # signal from environment that episode is over
         ep_rews = []            # list for rewards accrued throughout ep
@@ -143,7 +136,9 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
 
                 # the weight for each logprob(a|s) is R(tau)
                 batch_weights += [ep_ret] * ep_len
-                #batch_weights += np.arange(ep_ret**2, 0, -ep_ret).tolist()
+                batch_cow = [0] * ep_len
+                batch_cow[ep_len//2] = 1
+                batch_cows += batch_cow
 
                 # reset episode-specific variables
                 obs, done, ep_rews = env.reset()[0], False, []
@@ -160,15 +155,17 @@ def train(env_name='CartPole-v0', hidden_sizes=[32], critic_lr=0, actor_lr=0,
         critic_batch_loss = compute_critic_loss(obs=torch.as_tensor(batch_obs, dtype=torch.float32),
                                                 obsp=torch.as_tensor(batch_obsp, dtype=torch.float32),
                                                 act=torch.as_tensor(batch_acts, dtype=torch.float32).reshape((-1, act_output_dim)),
-                                                weights=torch.as_tensor(batch_weights, dtype=torch.float32))
-        critic_batch_loss.backward()
-        critic_optimizer.step()
-        
+                                                weights=torch.as_tensor(batch_weights, dtype=torch.float32),
+                                                cows=torch.as_tensor(batch_cows, dtype=torch.float32))
         actor_optimizer.zero_grad()
         actor_batch_loss = compute_actor_loss(obs=torch.as_tensor(batch_obs, dtype=torch.float32))
-        #if(epoch_idx > 1 and epoch_idx % 20 == 0):
-        actor_batch_loss.backward()
-        actor_optimizer.step()
+        
+        if((epoch_idx//10) % 2 == 0):
+            critic_batch_loss.backward()
+            critic_optimizer.step()
+        else:
+            actor_batch_loss.backward()
+            actor_optimizer.step()
         
 
         return critic_batch_loss, actor_batch_loss, batch_rets, batch_lens
@@ -184,8 +181,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env_name', '--env', type=str, default='CartPole-v0')
     parser.add_argument('--render', action='store_true')
-    parser.add_argument('--critic_lr', type=float, default=0.1)
-    parser.add_argument('--actor_lr', type=float, default=1e-2)
+    parser.add_argument('--critic_lr', type=float, default=2e-1)
+    parser.add_argument('--actor_lr', type=float, default=1e-3)
     args = parser.parse_args()
     print('\nUsing simplest formulation of policy gradient.\n')
     train(env_name=args.env_name, render=args.render, critic_lr=args.critic_lr, actor_lr=args.actor_lr)
